@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const csrf = require('csurf');
@@ -16,12 +17,23 @@ const ProjectMaster = require('./models/ProjectMaster');
 const PracticeMaster = require('./models/PracticeMaster');
 const AssignedSchedule = require('./models/AssignedSchedule');
 
-mongoose.connect('mongodb://127.0.0.1:27017/hrms-app', {
+// mongoose.connect('mongodb://127.0.0.1:27017/hrms-app', {
+//   useNewUrlParser: true,
+//   useUnifiedTopology: true
+// }).then(() => console.log('✅ MongoDB connected'))
+//   .catch(err => console.error('❌ MongoDB error:', err));
+
+
+  const mongoURI = process.env.MONGODB_URI;
+
+mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
-}).then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB error:', err));
-
+}).then(() => {
+  console.log('Connected to MongoDB');
+}).catch(err => {
+  console.error('MongoDB connection error:', err);
+});
 
 const app = express();
 const port = 3000;
