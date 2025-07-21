@@ -420,11 +420,7 @@ app.get('/assigned-resources', isAuth, isAdmin, async (req, res) => {
     }
     const uniqueSchedules = Object.values(latestSchedules);
 
-    // Debug: Log dailyHours for each schedule
-    console.log('Assigned Schedules dailyHours:');
-    uniqueSchedules.forEach(s => {
-      console.log(`Emp: ${s.employee?.empCode}, Project: ${s.project?.projectName}, dailyHours:`, s.dailyHours);
-    });
+    // ...removed debug logging of dailyHours...
 
     // Generate dateRange for the selected month (or current month if not selected)
     let year, month;
