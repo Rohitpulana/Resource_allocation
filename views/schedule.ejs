@@ -1,97 +1,275 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Scheduling Page</title>
-  <link rel="stylesheet" href="/stylesheets/styles.css">
-  <script>
-    async function fetchEmployee() {
-      const empId = document.getElementById('emp_id').value.trim();
-      if (!empId) return;
-
-      try {
-        const response = await fetch(`/api/employee/${empId}`);
-        if (!response.ok) throw new Error('Employee not found');
-        const data = await response.json();
-
-        document.getElementById('emp_name').value = data.name || '';
-        document.getElementById('payroll_company').value = data.payrollCompany || '';
-        document.getElementById('division').value = data.division || '';
-        document.getElementById('practice').value = data.practice || '';
-        document.getElementById('practice_head').value = data.practiceHead || '';
-      } catch (err) {
-        console.error('Error fetching employee:', err);
-        alert('No employee found with the provided Emp ID.');
-      }
+  <title>Assign Schedule</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    #employee-table {
+      display: none;
     }
-
-    async function fetchProjectDetails() {
-      const projectId = document.getElementById('project_id').value;
-      if (!projectId) return;
-
-      try {
-        const response = await fetch(`/api/project-by-id/${projectId}`);
-        if (!response.ok) throw new Error('Project not found');
-        const data = await response.json();
-
-        document.getElementById('project_manager').value = data.projectManager || '';
-        document.getElementById('cbsl_client').value = data.cbslClient || '';
-        document.getElementById('dih_client').value = data.dihClient || '';
-      } catch (err) {
-        console.error('Error fetching project details:', err);
-        alert('Failed to fetch project details');
-      }
+    .form-section {
+      margin-bottom: 20px;
     }
-  </script>
+  </style>
 </head>
-<body>
-  <h2>Assign Schedule</h2>
+<body class="bg-light">
 
-  <form action="/schedule" method="POST">
+<div class="container mt-5">
+  <h2 class="mb-4 text-primary text-center">🗓️ Assign Schedule</h2>
+
+  <div id="loading-status" class="mb-3 text-secondary"></div>
+
+  <form action="/schedule" method="POST" class="card p-4 shadow-sm bg-white">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <!-- Warning Alert -->
+    <div id="validationWarning" class="alert alert-danger d-none mb-3" role="alert"></div>
 
-    <label>Emp ID:</label>
-    <input type="text" id="emp_id" name="emp_id" onblur="fetchEmployee()" required><br>
+    <!-- Employee selection -->
+    <div class="form-section">
+      <label class="form-label"><strong>Select Employees:</strong></label>
+      <div id="employee-checkboxes" class="border rounded p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
+        <% employees.forEach(emp => { %>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="emp_ids" value="<%= emp.empCode %>" onchange="onEmployeeSelection()">
+            <label class="form-check-label">
+              <%= emp.empCode %> - <%= emp.name %>
+            </label>
+          </div>
+        <% }) %>
+      </div>
+    </div>
 
-    <label>Emp Name:</label>
-    <input type="text" id="emp_name" name="emp_name" readonly><br>
+    <!-- Selected employee details -->
+    <div class="form-section">
+      <table id="employee-table" class="table table-bordered table-striped mt-3" style="display:none;">
+        <thead class="table-primary">
+          <tr>
+            <th>Emp ID</th>
+            <th>Name</th>
+            <th>Payroll Company</th>
+            <th>Division</th>
+            <th>Practice</th>
+            <th>Practice Head</th>
+          </tr>
+        </thead>
+        <tbody id="employee-table-body"></tbody>
+      </table>
+    </div>
 
-    <label>Payroll Company:</label>
-    <input type="text" id="payroll_company" name="payroll_company" readonly><br>
+    <!-- Project(s) allocation -->
+    <div class="form-section" id="project-allocation-section">
+      <!-- Dynamic project rows will be inserted here -->
+    </div>
 
-    <label>Division:</label>
-    <input type="text" id="division" name="division" readonly><br>
+    <!-- Date range -->
+    <div class="row form-section">
+      <div class="col-md-6">
+        <label for="start_date" class="form-label">From Date:</label>
+        <input type="date" name="start_date" id="start_date" class="form-control" required>
+      </div>
+      <div class="col-md-6">
+        <label for="end_date" class="form-label">To Date:</label>
+        <input type="date" name="end_date" id="end_date" class="form-control" required>
+      </div>
+    </div>
 
-    <label>Practice:</label>
-    <input type="text" id="practice" name="practice" readonly><br>
-
-    <label>Practice Head:</label>
-    <input type="text" id="practice_head" name="practice_head" readonly><br>
-
-    <!-- Project Dropdown -->
-    <label>Project:</label>
-    <select id="project_id" name="project_id" required onchange="fetchProjectDetails()">
-      <option value="">-- Select Project --</option>
-      <% projects.forEach(project => { %>
-        <option value="<%= project._id %>"><%= project.projectName %></option>
-      <% }) %>
-    </select><br>
-
-    <label>Project Manager:</label>
-    <input type="text" id="project_manager" name="project_manager" readonly><br>
-
-    <label>CBSL Client:</label>
-    <input type="text" id="cbsl_client" name="cbsl_client" readonly><br>
-
-    <label>DIH Client:</label>
-    <input type="text" id="dih_client" name="dih_client" readonly><br>
-
-    <label>Date:</label>
-    <input type="date" name="date" required><br>
-
-    <label>Hours:</label>
-    <input type="number" name="hours" min="1" max="24" required><br>
-
-    <button type="submit">Submit</button>
+    <!-- Submit button -->
+    <div class="text-center mt-4">
+      <button type="submit" class="btn btn-success px-5">
+        ✅ Assign Schedule
+      </button>
+    </div>
   </form>
+</div>
+
+<!-- ✅ JavaScript -->
+<script>
+  // Helper: fetch and show selected employee details
+  async function fetchEmployeeDetails(selected) {
+    const tbody = document.getElementById('employee-table-body');
+    const table = document.getElementById('employee-table');
+    const loading = document.getElementById('loading-status');
+    tbody.innerHTML = '';
+    table.style.display = selected.length ? 'table' : 'none';
+    if (!selected.length) return;
+    loading.textContent = 'Fetching employee details...';
+    for (const empCode of selected) {
+      try {
+        const res = await fetch(`/api/employee/${empCode}`);
+        if (!res.ok) throw new Error();
+        const emp = await res.json();
+        const row = `
+          <tr>
+            <td>${empCode}</td>
+            <td>${emp.name || ''}</td>
+            <td>${emp.payrollCompany || ''}</td>
+            <td>${emp.division || ''}</td>
+            <td>${emp.practice || ''}</td>
+            <td>${emp.practiceHead || ''}</td>
+          </tr>`;
+        tbody.insertAdjacentHTML('beforeend', row);
+      } catch {
+        alert(`Failed to fetch employee: ${empCode}`);
+      }
+    }
+    loading.textContent = '';
+  }
+
+  // UI logic for project allocation
+  function onEmployeeSelection() {
+    const selected = Array.from(document.querySelectorAll('input[name="emp_ids"]:checked')).map(cb => cb.value);
+    fetchEmployeeDetails(selected);
+    const section = document.getElementById('project-allocation-section');
+    section.innerHTML = '';
+    if (!selected.length) return;
+    // If single employee, allow multiple projects
+    if (selected.length === 1) {
+      section.innerHTML = `<label class='form-label'><strong>Allocate Projects:</strong></label>
+        <div id='project-rows'></div>
+        <button type='button' class='btn btn-outline-primary btn-sm mt-2' onclick='addProjectRow()'>➕ Add Project</button>`;
+      addProjectRow();
+      // Enable validation on all initial inputs
+      setTimeout(() => {
+        document.querySelectorAll('.hours-input').forEach(inp => {
+          inp.oninput = function() { validateHoursInput(this); };
+        });
+      }, 100);
+    } else {
+      // Multiple employees: single project allocation
+      section.innerHTML = `<label class='form-label'><strong>Allocate Project:</strong></label>
+        <div class='row mb-2'>
+          <div class='col-md-6'>
+            <select name='project_id' class='form-select' required>
+              <option value=''>-- Select Project --</option>
+              <% projects.forEach(project => { %>
+                <option value='<%= project._id %>'><%= project.projectName %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class='col-md-3'>
+            <input type='number' name='hours' class='form-control' min='1' max='8' placeholder='Hours (1-8)' required oninput='validateMultiEmpHours(this)'>
+            <div class='text-danger small hours-warning' style='display:none;'></div>
+          </div>
+        </div>`;
+      // Enable validation for multi-employee mode
+      setTimeout(() => {
+        const inp = section.querySelector('input[name="hours"]');
+        if (inp) inp.oninput = function() { validateMultiEmpHours(this); };
+      }, 100);
+    }
+  }
+
+  // Add a new project row for single employee allocation
+  function addProjectRow() {
+    const container = document.getElementById('project-rows');
+    const idx = container ? container.children.length : 0;
+    const row = document.createElement('div');
+    row.className = 'row mb-2';
+    row.innerHTML = `
+      <div class='col-md-6'>
+        <select name='project_ids[]' class='form-select' required>
+          <option value=''>-- Select Project --</option>
+          <% projects.forEach(project => { %>
+            <option value='<%= project._id %>'><%= project.projectName %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class='col-md-3'>
+        <input type='number' name='hours_list[]' class='form-control hours-input' min='1' max='8' placeholder='Hours (1-8)' required oninput='validateHoursInput(this)'>
+        <div class='text-danger small hours-warning' style='display:none;'></div>
+      </div>
+      <div class='col-md-2'>
+        <button type='button' class='btn btn-outline-danger btn-sm' onclick='this.parentElement.parentElement.remove()'>🗑️</button>
+      </div>
+    `;
+    container.appendChild(row);
+  }
+
+  // Real-time validation for hours input (single employee mode)
+  function validateHoursInput(input) {
+    const value = Number(input.value);
+    const warningDiv = input.parentElement.querySelector('.hours-warning');
+    let valid = true;
+    let msg = '';
+    if (isNaN(value) || value < 1 || value > 8) {
+      valid = false;
+      msg = 'Hours must be between 1 and 8.';
+    }
+    // Sum validation for all project rows
+    if (valid) {
+      const allInputs = document.querySelectorAll('.hours-input');
+      let total = 0;
+      allInputs.forEach(inp => {
+        const v = Number(inp.value);
+        if (!isNaN(v)) total += v;
+      });
+      if (total < 1 || total > 8) {
+        valid = false;
+        msg = 'Total hours for this employee must be between 1 and 8 (inclusive) per day.';
+      }
+    }
+    if (!valid) {
+      warningDiv.textContent = msg;
+      warningDiv.style.display = 'block';
+      document.getElementById('validationWarning').textContent = msg;
+      document.getElementById('validationWarning').classList.remove('d-none');
+    } else {
+      warningDiv.textContent = '';
+      warningDiv.style.display = 'none';
+      document.getElementById('validationWarning').textContent = '';
+      document.getElementById('validationWarning').classList.add('d-none');
+    }
+    // Block submit if invalid
+    document.querySelector('button[type="submit"]').disabled = !valid;
+  }
+
+  // Real-time validation for multi-employee mode
+  function validateMultiEmpHours(input) {
+    const value = Number(input.value);
+    const warningDiv = input.parentElement.querySelector('.hours-warning');
+    let valid = true;
+    let msg = '';
+    if (isNaN(value) || value < 1 || value > 8) {
+      valid = false;
+      msg = 'Hours must be between 1 and 8.';
+    }
+    if (!valid) {
+      warningDiv.textContent = msg;
+      warningDiv.style.display = 'block';
+      document.getElementById('validationWarning').textContent = msg;
+      document.getElementById('validationWarning').classList.remove('d-none');
+    } else {
+      warningDiv.textContent = '';
+      warningDiv.style.display = 'none';
+      document.getElementById('validationWarning').textContent = '';
+      document.getElementById('validationWarning').classList.add('d-none');
+    }
+    document.querySelector('button[type="submit"]').disabled = !valid;
+  }
+</script>
+
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
